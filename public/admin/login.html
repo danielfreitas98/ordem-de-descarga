@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Sistema de Ordem de Descarga</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            padding: 20px;
+        }
+        .login-card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        .login-logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .login-logo .icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin-bottom: 15px;
+        }
+        .login-logo h1 {
+            font-size: 1.5rem;
+            color: var(--text-primary);
+        }
+        .login-logo p {
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .back-link a {
+            color: white;
+            text-decoration: none;
+            opacity: 0.8;
+        }
+        .back-link a:hover {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="icon">📦</div>
+                <h1>Ordem de Descarga</h1>
+                <p>Acesse o painel administrativo</p>
+            </div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="email" class="form-control" placeholder="seu@email.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Senha</label>
+                    <input type="password" id="senha" class="form-control" placeholder="Sua senha" required>
+                </div>
+                
+                <div id="loginError" class="alert alert-danger" style="display: none;"></div>
+                
+                <button type="submit" class="btn btn-primary btn-block" id="btnLogin">
+                    Entrar
+                </button>
+            </form>
+        </div>
+        
+        <div class="back-link">
+            <a href="/">← Voltar para tela inicial</a>
+        </div>
+    </div>
+
+    <script src="/js/utils.js"></script>
+    <script>
+        if (localStorage.getItem('token')) {
+            window.location.href = '/admin/';
+        }
+        
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const btn = document.getElementById('btnLogin');
+            const errorDiv = document.getElementById('loginError');
+            
+            btn.disabled = true;
+            btn.textContent = 'Entrando...';
+            errorDiv.style.display = 'none';
+            
+            try {
+                const response = await fetchAPI('/api/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        email: document.getElementById('email').value,
+                        senha: document.getElementById('senha').value
+                    })
+                });
+                
+                localStorage.setItem('token', response.token);
+                localStorage.setItem('usuario', JSON.stringify(response.usuario));
+                
+                window.location.href = '/admin/';
+                
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Entrar';
+            }
+        });
+    </script>
+</body>
+</html>

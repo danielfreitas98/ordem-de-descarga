@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Administrativo - Ordem de Descarga</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <div class="logo-icon">📦</div>
+                <span>Ordem Descarga</span>
+            </div>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="#" class="active" data-page="dashboard">
+                📊 Dashboard
+            </a>
+            <a href="#" data-page="ordens">
+                📋 Ordens
+            </a>
+            <a href="#" data-page="cadastros">
+                📁 Cadastros
+            </a>
+            <a href="#" data-page="usuarios" id="menuUsuarios" style="display: none;">
+                👥 Usuários
+            </a>
+        </nav>
+    </aside>
+
+    <div class="admin-container">
+        <header class="admin-header">
+            <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+            <div class="user-menu">
+                <span id="userName"></span>
+                <div class="user-avatar" id="userAvatar"></div>
+                <button class="btn btn-outline btn-sm" onclick="logout()">Sair</button>
+            </div>
+        </header>
+
+        <main class="admin-content">
+            <!-- Dashboard -->
+            <div id="page-dashboard" class="page-content">
+                <h1 style="margin-bottom: 24px;">Dashboard</h1>
+                
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card warning">
+                        <div class="stat-icon">⏳</div>
+                        <div class="stat-value" id="statAguardando">0</div>
+                        <div class="stat-label">Aguardando</div>
+                    </div>
+                    <div class="stat-card primary">
+                        <div class="stat-icon">🚛</div>
+                        <div class="stat-value" id="statEmDescarga">0</div>
+                        <div class="stat-label">Em Descarga</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-icon">💰</div>
+                        <div class="stat-value" id="statFaturado">R$ 0</div>
+                        <div class="stat-label">Faturado (Mês)</div>
+                    </div>
+                    <div class="stat-card info">
+                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-value" id="statTempoMedio">0 min</div>
+                        <div class="stat-label">Tempo Médio</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Ordens Recentes</h2>
+                        <a href="#" class="btn btn-outline btn-sm" onclick="navegarPara('ordens')">Ver Todas</a>
+                    </div>
+                    <div class="table-container">
+                        <table class="table" id="tabelaOrdensRecentes">
+                            <thead>
+                                <tr>
+                                    <th>Número</th>
+                                    <th>Motorista</th>
+                                    <th>Empresa</th>
+                                    <th>Status</th>
+                                    <th>Data</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ordens -->
+            <div id="page-ordens" class="page-content" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h1>Ordens de Descarga</h1>
+                </div>
+
+                <div class="filters">
+                    <select id="filtroStatus" class="form-control">
+                        <option value="">Todos os Status</option>
+                        <option value="aguardando">Aguardando</option>
+                        <option value="em_descarga">Em Descarga</option>
+                        <option value="finalizada">Finalizada</option>
+                        <option value="faturada">Faturada</option>
+                        <option value="paga">Paga</option>
+                        <option value="cancelada">Cancelada</option>
+                    </select>
+                    <input type="date" id="filtroDataInicio" class="form-control">
+                    <input type="date" id="filtroDataFim" class="form-control">
+                    <input type="text" id="filtroBusca" class="form-control" placeholder="Buscar...">
+                    <button class="btn btn-primary" onclick="carregarOrdens()">Filtrar</button>
+                </div>
+
+                <div class="card">
+                    <div class="table-container">
+                        <table class="table" id="tabelaOrdens">
+                            <thead>
+                                <tr>
+                                    <th>Número</th>
+                                    <th>Motorista</th>
+                                    <th>Empresa Destino</th>
+                                    <th>Placa</th>
+                                    <th>Status</th>
+                                    <th>Valor</th>
+                                    <th>Data Entrada</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="pagination" id="paginacaoOrdens"></div>
+                </div>
+            </div>
+
+            <!-- Cadastros -->
+            <div id="page-cadastros" class="page-content" style="display: none;">
+                <h1 style="margin-bottom: 24px;">Cadastros</h1>
+                
+                <div class="tabs">
+                    <button class="tab active" data-cadastro="transportadoras">Transportadoras</button>
+                    <button class="tab" data-cadastro="empresas">Empresas Destino</button>
+                    <button class="tab" data-cadastro="motoristas">Motoristas</button>
+                </div>
+
+                <div id="cadastro-transportadoras" class="cadastro-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Transportadoras</h2>
+                            <button class="btn btn-primary btn-sm" onclick="abrirModalTransportadora()">+ Nova</button>
+                        </div>
+                        <div class="table-container">
+                            <table class="table" id="tabelaTransportadoras">
+                                <thead>
+                                    <tr>
+                                        <th>Razão Social</th>
+                                        <th>CNPJ</th>
+                                        <th>Telefone</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cadastro-empresas" class="cadastro-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Empresas Destino</h2>
+                            <button class="btn btn-primary btn-sm" onclick="abrirModalEmpresa()">+ Nova</button>
+                        </div>
+                        <div class="table-container">
+                            <table class="table" id="tabelaEmpresas">
+                                <thead>
+                                    <tr>
+                                        <th>Razão Social</th>
+                                        <th>CNPJ</th>
+                                        <th>Endereço</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cadastro-motoristas" class="cadastro-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Motoristas</h2>
+                            <button class="btn btn-primary btn-sm" onclick="abrirModalMotorista()">+ Novo</button>
+                        </div>
+                        <div class="table-container">
+                            <table class="table" id="tabelaMotoristas">
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>CPF</th>
+                                        <th>Telefone</th>
+                                        <th>Transportadora</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Usuários -->
+            <div id="page-usuarios" class="page-content" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h1>Usuários</h1>
+                    <button class="btn btn-primary" onclick="abrirModalUsuario()">+ Novo Usuário</button>
+                </div>
+
+                <div class="card">
+                    <div class="table-container">
+                        <table class="table" id="tabelaUsuarios">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Email</th>
+                                    <th>Perfil</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Ordem -->
+    <div class="modal-overlay" id="modalOrdem">
+        <div class="modal" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Detalhes da Ordem</h3>
+                <button class="modal-close" onclick="fecharModal('modalOrdem')">&times;</button>
+            </div>
+            <div class="modal-body" id="modalOrdemBody">
+                <!-- Conteúdo dinâmico -->
+            </div>
+            <div class="modal-footer" id="modalOrdemFooter">
+                <!-- Ações dinâmicas -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Status -->
+    <div class="modal-overlay" id="modalStatus">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Alterar Status</h3>
+                <button class="modal-close" onclick="fecharModal('modalStatus')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="statusOrdemId">
+                <div class="form-group">
+                    <label class="form-label">Novo Status</label>
+                    <select id="novoStatus" class="form-control">
+                        <option value="em_descarga">Em Descarga</option>
+                        <option value="finalizada">Finalizada</option>
+                        <option value="faturada">Faturada</option>
+                        <option value="paga">Paga</option>
+                        <option value="cancelada">Cancelada</option>
+                    </select>
+                </div>
+                <div class="form-group" id="grupoValorDescarga" style="display: none;">
+                    <label class="form-label">Valor da Descarga (R$)</label>
+                    <input type="number" id="valorDescarga" class="form-control" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observação</label>
+                    <textarea id="observacaoStatus" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="fecharModal('modalStatus')">Cancelar</button>
+                <button class="btn btn-primary" onclick="salvarStatus()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Transportadora -->
+    <div class="modal-overlay" id="modalTransportadora">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="tituloModalTransportadora">Nova Transportadora</h3>
+                <button class="modal-close" onclick="fecharModal('modalTransportadora')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="transportadoraEditId">
+                <div class="form-group">
+                    <label class="form-label">Razão Social *</label>
+                    <input type="text" id="transportadoraRazao" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">CNPJ</label>
+                    <input type="text" id="transportadoraCnpj" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Telefone</label>
+                    <input type="text" id="transportadoraTelefone" class="form-control">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="fecharModal('modalTransportadora')">Cancelar</button>
+                <button class="btn btn-primary" onclick="salvarTransportadora()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Empresa -->
+    <div class="modal-overlay" id="modalEmpresa">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="tituloModalEmpresa">Nova Empresa</h3>
+                <button class="modal-close" onclick="fecharModal('modalEmpresa')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="empresaEditId">
+                <div class="form-group">
+                    <label class="form-label">Razão Social *</label>
+                    <input type="text" id="empresaRazao" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">CNPJ</label>
+                    <input type="text" id="empresaCnpj" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Endereço</label>
+                    <input type="text" id="empresaEndereco" class="form-control">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="fecharModal('modalEmpresa')">Cancelar</button>
+                <button class="btn btn-primary" onclick="salvarEmpresa()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Motorista -->
+    <div class="modal-overlay" id="modalMotorista">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="tituloModalMotorista">Novo Motorista</h3>
+                <button class="modal-close" onclick="fecharModal('modalMotorista')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="motoristaEditId">
+                <div class="form-group">
+                    <label class="form-label">Nome *</label>
+                    <input type="text" id="motoristaNomeEdit" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">CPF *</label>
+                    <input type="text" id="motoristaCpfEdit" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">CNH</label>
+                    <input type="text" id="motoristaCnhEdit" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Telefone</label>
+                    <input type="text" id="motoristaTelefoneEdit" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Transportadora</label>
+                    <select id="motoristaTransportadoraEdit" class="form-control">
+                        <option value="">Selecione</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="fecharModal('modalMotorista')">Cancelar</button>
+                <button class="btn btn-primary" onclick="salvarMotorista()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Usuário -->
+    <div class="modal-overlay" id="modalUsuario">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="tituloModalUsuario">Novo Usuário</h3>
+                <button class="modal-close" onclick="fecharModal('modalUsuario')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="usuarioEditId">
+                <div class="form-group">
+                    <label class="form-label">Nome *</label>
+                    <input type="text" id="usuarioNome" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email *</label>
+                    <input type="email" id="usuarioEmail" class="form-control" required>
+                </div>
+                <div class="form-group" id="grupoSenha">
+                    <label class="form-label">Senha *</label>
+                    <input type="password" id="usuarioSenha" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Perfil *</label>
+                    <select id="usuarioPerfil" class="form-control" required>
+                        <option value="portaria">Portaria</option>
+                        <option value="operador">Operador</option>
+                        <option value="financeiro">Financeiro</option>
+                        <option value="admin">Administrador</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="fecharModal('modalUsuario')">Cancelar</button>
+                <button class="btn btn-primary" onclick="salvarUsuario()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/utils.js"></script>
+    <script src="/js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ordem de Descarga - Abertura de Ordem</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container header-content">
+            <div class="logo">
+                <div class="logo-icon">📦</div>
+                <span>Ordem de Descarga</span>
+            </div>
+            <nav class="nav">
+                <a href="/admin/" class="btn-outline" style="background: rgba(255,255,255,0.1);">Área Administrativa</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="container">
+            <div class="hero-section">
+                <h1 class="hero-title">Registro de Ordem de Descarga</h1>
+                <p class="hero-subtitle">Preencha os dados abaixo para registrar sua chegada</p>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="nova-ordem">Nova Ordem</button>
+                <button class="tab" data-tab="consultar">Consultar Ordem</button>
+            </div>
+
+            <div id="nova-ordem" class="tab-content active">
+                <div class="step-indicator">
+                    <div class="step active" data-step="1">
+                        <span class="step-number">1</span>
+                        <span>Identificação</span>
+                    </div>
+                    <div class="step" data-step="2">
+                        <span class="step-number">2</span>
+                        <span>Dados da Carga</span>
+                    </div>
+                    <div class="step" data-step="3">
+                        <span class="step-number">3</span>
+                        <span>Confirmação</span>
+                    </div>
+                </div>
+
+                <form id="formOrdem">
+                    <!-- Step 1: Identificação -->
+                    <div class="card step-content" data-step="1">
+                        <div class="card-header">
+                            <h2 class="card-title">Identificação do Motorista</h2>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">CPF do Motorista *</label>
+                            <input type="text" id="cpfBusca" class="form-control" placeholder="Digite seu CPF" maxlength="14">
+                            <small style="color: var(--text-secondary); margin-top: 5px; display: block;">
+                                Digite seu CPF para buscar seus dados ou cadastrar-se
+                            </small>
+                        </div>
+
+                        <div id="dadosMotorista" style="display: none;">
+                            <div class="alert alert-info" id="motoristaEncontrado" style="display: none;">
+                                Motorista encontrado! Confirme seus dados abaixo.
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Nome Completo *</label>
+                                    <input type="text" id="motoristaNome" class="form-control" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Telefone</label>
+                                    <input type="text" id="motoristaTelefone" class="form-control" placeholder="(00) 00000-0000">
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">CNH</label>
+                                    <input type="text" id="motoristaCnh" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Transportadora</label>
+                                    <select id="transportadoraId" class="form-control">
+                                        <option value="">Selecione (opcional)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <input type="hidden" id="motoristaId">
+
+                            <div style="text-align: right; margin-top: 20px;">
+                                <button type="button" class="btn btn-primary" onclick="proximoStep(2)">
+                                    Próximo →
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Dados da Carga -->
+                    <div class="card step-content" data-step="2" style="display: none;">
+                        <div class="card-header">
+                            <h2 class="card-title">Dados da Carga</h2>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Empresa Destino *</label>
+                                <select id="empresaDestinoId" class="form-control" required>
+                                    <option value="">Selecione a empresa</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Placa do Veículo *</label>
+                                <input type="text" id="placaVeiculo" class="form-control" placeholder="ABC-1234" required maxlength="8">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Tipo de Carga *</label>
+                                <input type="text" id="tipoCarga" class="form-control" placeholder="Ex: Paletizada, Granel, etc." required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Peso da Carga (kg)</label>
+                                <input type="number" id="pesoCarga" class="form-control" step="0.01">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Quantidade de Volumes</label>
+                                <input type="number" id="quantidadeVolumes" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Nota Fiscal</label>
+                                <input type="text" id="notaFiscal" class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Observações</label>
+                            <textarea id="observacoes" class="form-control" rows="3" placeholder="Informações adicionais..."></textarea>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                            <button type="button" class="btn btn-outline" onclick="voltarStep(1)">
+                                ← Voltar
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="proximoStep(3)">
+                                Próximo →
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Confirmação -->
+                    <div class="card step-content" data-step="3" style="display: none;">
+                        <div class="card-header">
+                            <h2 class="card-title">Confirmação dos Dados</h2>
+                        </div>
+
+                        <div id="resumoOrdem">
+                            <!-- Preenchido via JavaScript -->
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                            <button type="button" class="btn btn-outline" onclick="voltarStep(2)">
+                                ← Voltar
+                            </button>
+                            <button type="submit" class="btn btn-success" id="btnEnviar">
+                                Confirmar Ordem
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Sucesso -->
+                <div class="card" id="ordemSucesso" style="display: none;">
+                    <div class="success-message">
+                        <div class="success-icon">✓</div>
+                        <h2>Ordem Registrada com Sucesso!</h2>
+                        <p class="order-number" id="numeroOrdemCriada"></p>
+                        <p style="color: var(--text-secondary); margin-bottom: 30px;">
+                            Guarde este número para acompanhar o status da sua descarga.
+                        </p>
+                        <button class="btn btn-primary" onclick="novaOrdem()">Registrar Nova Ordem</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="consultar" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Consultar Ordem de Descarga</h2>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Número da Ordem</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="numeroConsulta" class="form-control" placeholder="Ex: OD202403010001">
+                            <button type="button" class="btn btn-primary" onclick="consultarOrdem()">Consultar</button>
+                        </div>
+                    </div>
+
+                    <div id="resultadoConsulta" style="display: none;">
+                        <!-- Preenchido via JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer style="background: var(--bg-secondary); border-top: 1px solid var(--border); padding: 20px; text-align: center; color: var(--text-secondary);">
+        <div class="container">
+            Sistema de Ordem de Descarga © 2024
+        </div>
+    </footer>
+
+    <script src="/js/utils.js"></script>
+    <script src="/js/motorista.js"></script>
+</body>
+</html>
