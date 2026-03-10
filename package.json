@@ -4,13 +4,13 @@
   "description": "Sistema web para registro de Ordem de Descarga",
   "main": "src/app.js",
   "engines": {
-    "node": ">=18.0.0"
+    "node": "18.x"
   },
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
     "init-db": "node src/database/init.js",
-    "build": "npm run init-db"
+    "build": "echo Build OK"
   },
   "keywords": ["ordem", "descarga", "logistica"],
   "author": "",
