@@ -6,7 +6,7 @@ const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
     try {
         const { email, senha } = req.body;
         
@@ -14,7 +14,10 @@ router.post('/login', (req, res) => {
             return res.status(400).json({ error: 'Email e senha são obrigatórios' });
         }
         
-        const usuario = db.prepare('SELECT * FROM usuarios WHERE email = ? AND ativo = 1').get(email);
+        const usuario = await db.getOne(
+            'SELECT * FROM usuarios WHERE email = $1 AND ativo = true',
+            [email]
+        );
         
         if (!usuario) {
             return res.status(401).json({ error: 'Credenciais inválidas' });
@@ -27,7 +30,7 @@ router.post('/login', (req, res) => {
         const token = jwt.sign(
             { id: usuario.id, perfil: usuario.perfil },
             process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRES_IN }
+            { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
         );
         
         res.json({
@@ -49,7 +52,7 @@ router.get('/me', authMiddleware, (req, res) => {
     res.json(req.usuario);
 });
 
-router.put('/alterar-senha', authMiddleware, (req, res) => {
+router.put('/alterar-senha', authMiddleware, async (req, res) => {
     try {
         const { senhaAtual, novaSenha } = req.body;
         
@@ -57,15 +60,20 @@ router.put('/alterar-senha', authMiddleware, (req, res) => {
             return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias' });
         }
         
-        const usuario = db.prepare('SELECT senha FROM usuarios WHERE id = ?').get(req.usuario.id);
+        const usuario = await db.getOne(
+            'SELECT senha FROM usuarios WHERE id = $1',
+            [req.usuario.id]
+        );
         
         if (!bcrypt.compareSync(senhaAtual, usuario.senha)) {
             return res.status(400).json({ error: 'Senha atual incorreta' });
         }
         
         const senhaHash = bcrypt.hashSync(novaSenha, 10);
-        db.prepare('UPDATE usuarios SET senha = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?')
-            .run(senhaHash, req.usuario.id);
+        await db.query(
+            'UPDATE usuarios SET senha = $1, atualizado_em = NOW() WHERE id = $2',
+            [senhaHash, req.usuario.id]
+        );
         
         res.json({ message: 'Senha alterada com sucesso' });
     } catch (error) {

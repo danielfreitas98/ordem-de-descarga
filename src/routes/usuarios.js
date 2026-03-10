@@ -8,13 +8,13 @@ const router = express.Router();
 router.use(authMiddleware);
 router.use(perfilMiddleware('admin'));
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
     try {
-        const usuarios = db.prepare(`
+        const usuarios = await db.getAll(`
             SELECT id, nome, email, perfil, ativo, criado_em, atualizado_em 
             FROM usuarios 
             ORDER BY nome
-        `).all();
+        `);
         
         res.json(usuarios);
     } catch (error) {
@@ -23,12 +23,12 @@ router.get('/', (req, res) => {
     }
 });
 
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
     try {
-        const usuario = db.prepare(`
+        const usuario = await db.getOne(`
             SELECT id, nome, email, perfil, ativo, criado_em, atualizado_em 
-            FROM usuarios WHERE id = ?
-        `).get(req.params.id);
+            FROM usuarios WHERE id = $1
+        `, [req.params.id]);
         
         if (!usuario) {
             return res.status(404).json({ error: 'Usuário não encontrado' });
@@ -41,7 +41,7 @@ router.get('/:id', (req, res) => {
     }
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const { nome, email, senha, perfil } = req.body;
         
@@ -54,20 +54,21 @@ router.post('/', (req, res) => {
             return res.status(400).json({ error: 'Perfil inválido' });
         }
         
-        const existente = db.prepare('SELECT id FROM usuarios WHERE email = ?').get(email);
+        const existente = await db.getOne('SELECT id FROM usuarios WHERE email = $1', [email]);
         if (existente) {
             return res.status(400).json({ error: 'Email já cadastrado' });
         }
         
         const senhaHash = bcrypt.hashSync(senha, 10);
         
-        const result = db.prepare(`
+        const result = await db.getOne(`
             INSERT INTO usuarios (nome, email, senha, perfil) 
-            VALUES (?, ?, ?, ?)
-        `).run(nome, email, senhaHash, perfil);
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+        `, [nome, email, senhaHash, perfil]);
         
         res.status(201).json({ 
-            id: result.lastInsertRowid,
+            id: result.id,
             message: 'Usuário criado com sucesso' 
         });
     } catch (error) {
@@ -76,51 +77,55 @@ router.post('/', (req, res) => {
     }
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
     try {
         const { nome, email, perfil, ativo, senha } = req.body;
         const { id } = req.params;
         
-        const usuario = db.prepare('SELECT id FROM usuarios WHERE id = ?').get(id);
+        const usuario = await db.getOne('SELECT id FROM usuarios WHERE id = $1', [id]);
         if (!usuario) {
             return res.status(404).json({ error: 'Usuário não encontrado' });
         }
         
         if (email) {
-            const existente = db.prepare('SELECT id FROM usuarios WHERE email = ? AND id != ?').get(email, id);
+            const existente = await db.getOne(
+                'SELECT id FROM usuarios WHERE email = $1 AND id != $2',
+                [email, id]
+            );
             if (existente) {
                 return res.status(400).json({ error: 'Email já cadastrado' });
             }
         }
         
-        let query = 'UPDATE usuarios SET atualizado_em = CURRENT_TIMESTAMP';
+        let query = 'UPDATE usuarios SET atualizado_em = NOW()';
         const params = [];
+        let paramIndex = 1;
         
         if (nome) {
-            query += ', nome = ?';
+            query += `, nome = $${paramIndex++}`;
             params.push(nome);
         }
         if (email) {
-            query += ', email = ?';
+            query += `, email = $${paramIndex++}`;
             params.push(email);
         }
         if (perfil) {
-            query += ', perfil = ?';
+            query += `, perfil = $${paramIndex++}`;
             params.push(perfil);
         }
         if (ativo !== undefined) {
-            query += ', ativo = ?';
-            params.push(ativo ? 1 : 0);
+            query += `, ativo = $${paramIndex++}`;
+            params.push(ativo);
         }
         if (senha) {
-            query += ', senha = ?';
+            query += `, senha = $${paramIndex++}`;
             params.push(bcrypt.hashSync(senha, 10));
         }
         
-        query += ' WHERE id = ?';
+        query += ` WHERE id = $${paramIndex}`;
         params.push(id);
         
-        db.prepare(query).run(...params);
+        await db.query(query, params);
         
         res.json({ message: 'Usuário atualizado com sucesso' });
     } catch (error) {
@@ -129,7 +134,7 @@ router.put('/:id', (req, res) => {
     }
 });
 
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
         
@@ -137,7 +142,10 @@ router.delete('/:id', (req, res) => {
             return res.status(400).json({ error: 'Você não pode excluir seu próprio usuário' });
         }
         
-        db.prepare('UPDATE usuarios SET ativo = 0, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+        await db.query(
+            'UPDATE usuarios SET ativo = false, atualizado_em = NOW() WHERE id = $1',
+            [id]
+        );
         
         res.json({ message: 'Usuário desativado com sucesso' });
     } catch (error) {

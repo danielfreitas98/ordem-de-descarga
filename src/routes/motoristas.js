@@ -4,16 +4,16 @@ const { authMiddleware, perfilMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.get('/buscar-cpf/:cpf', (req, res) => {
+router.get('/buscar-cpf/:cpf', async (req, res) => {
     try {
         const cpf = req.params.cpf.replace(/\D/g, '');
         
-        const motorista = db.prepare(`
+        const motorista = await db.getOne(`
             SELECT m.*, t.razao_social as transportadora_nome
             FROM motoristas m
             LEFT JOIN transportadoras t ON m.transportadora_id = t.id
-            WHERE m.cpf = ? AND m.ativo = 1
-        `).get(cpf);
+            WHERE m.cpf = $1 AND m.ativo = true
+        `, [cpf]);
         
         if (!motorista) {
             return res.status(404).json({ error: 'Motorista não encontrado' });
@@ -26,7 +26,7 @@ router.get('/buscar-cpf/:cpf', (req, res) => {
     }
 });
 
-router.post('/publico', (req, res) => {
+router.post('/publico', async (req, res) => {
     try {
         const { nome, cpf, cnh, telefone, transportadora_id } = req.body;
         
@@ -36,7 +36,10 @@ router.post('/publico', (req, res) => {
         
         const cpfLimpo = cpf.replace(/\D/g, '');
         
-        const existente = db.prepare('SELECT id FROM motoristas WHERE cpf = ?').get(cpfLimpo);
+        const existente = await db.getOne(
+            'SELECT id FROM motoristas WHERE cpf = $1',
+            [cpfLimpo]
+        );
         if (existente) {
             return res.json({ 
                 id: existente.id,
@@ -45,13 +48,14 @@ router.post('/publico', (req, res) => {
             });
         }
         
-        const result = db.prepare(`
+        const result = await db.getOne(`
             INSERT INTO motoristas (nome, cpf, cnh, telefone, transportadora_id) 
-            VALUES (?, ?, ?, ?, ?)
-        `).run(nome, cpfLimpo, cnh || null, telefone || null, transportadora_id || null);
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+        `, [nome, cpfLimpo, cnh || null, telefone || null, transportadora_id || null]);
         
         res.status(201).json({ 
-            id: result.lastInsertRowid,
+            id: result.id,
             message: 'Motorista cadastrado com sucesso',
             existente: false
         });
@@ -61,15 +65,15 @@ router.post('/publico', (req, res) => {
     }
 });
 
-router.get('/', authMiddleware, (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
     try {
-        const motoristas = db.prepare(`
+        const motoristas = await db.getAll(`
             SELECT m.*, t.razao_social as transportadora_nome
             FROM motoristas m
             LEFT JOIN transportadoras t ON m.transportadora_id = t.id
-            WHERE m.ativo = 1
+            WHERE m.ativo = true
             ORDER BY m.nome
-        `).all();
+        `);
         
         res.json(motoristas);
     } catch (error) {
@@ -78,14 +82,14 @@ router.get('/', authMiddleware, (req, res) => {
     }
 });
 
-router.get('/:id', authMiddleware, (req, res) => {
+router.get('/:id', authMiddleware, async (req, res) => {
     try {
-        const motorista = db.prepare(`
+        const motorista = await db.getOne(`
             SELECT m.*, t.razao_social as transportadora_nome
             FROM motoristas m
             LEFT JOIN transportadoras t ON m.transportadora_id = t.id
-            WHERE m.id = ?
-        `).get(req.params.id);
+            WHERE m.id = $1
+        `, [req.params.id]);
         
         if (!motorista) {
             return res.status(404).json({ error: 'Motorista não encontrado' });
@@ -98,7 +102,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     }
 });
 
-router.post('/', authMiddleware, perfilMiddleware('admin', 'portaria'), (req, res) => {
+router.post('/', authMiddleware, perfilMiddleware('admin', 'portaria'), async (req, res) => {
     try {
         const { nome, cpf, cnh, telefone, transportadora_id } = req.body;
         
@@ -108,18 +112,22 @@ router.post('/', authMiddleware, perfilMiddleware('admin', 'portaria'), (req, re
         
         const cpfLimpo = cpf.replace(/\D/g, '');
         
-        const existente = db.prepare('SELECT id FROM motoristas WHERE cpf = ?').get(cpfLimpo);
+        const existente = await db.getOne(
+            'SELECT id FROM motoristas WHERE cpf = $1',
+            [cpfLimpo]
+        );
         if (existente) {
             return res.status(400).json({ error: 'CPF já cadastrado' });
         }
         
-        const result = db.prepare(`
+        const result = await db.getOne(`
             INSERT INTO motoristas (nome, cpf, cnh, telefone, transportadora_id) 
-            VALUES (?, ?, ?, ?, ?)
-        `).run(nome, cpfLimpo, cnh || null, telefone || null, transportadora_id || null);
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+        `, [nome, cpfLimpo, cnh || null, telefone || null, transportadora_id || null]);
         
         res.status(201).json({ 
-            id: result.lastInsertRowid,
+            id: result.id,
             message: 'Motorista criado com sucesso' 
         });
     } catch (error) {
@@ -128,42 +136,42 @@ router.post('/', authMiddleware, perfilMiddleware('admin', 'portaria'), (req, re
     }
 });
 
-router.put('/:id', authMiddleware, perfilMiddleware('admin', 'portaria'), (req, res) => {
+router.put('/:id', authMiddleware, perfilMiddleware('admin', 'portaria'), async (req, res) => {
     try {
         const { nome, cpf, cnh, telefone, transportadora_id, ativo } = req.body;
         const { id } = req.params;
         
-        const motorista = db.prepare('SELECT id FROM motoristas WHERE id = ?').get(id);
+        const motorista = await db.getOne(
+            'SELECT id FROM motoristas WHERE id = $1',
+            [id]
+        );
         if (!motorista) {
             return res.status(404).json({ error: 'Motorista não encontrado' });
         }
         
         if (cpf) {
             const cpfLimpo = cpf.replace(/\D/g, '');
-            const existente = db.prepare('SELECT id FROM motoristas WHERE cpf = ? AND id != ?').get(cpfLimpo, id);
+            const existente = await db.getOne(
+                'SELECT id FROM motoristas WHERE cpf = $1 AND id != $2',
+                [cpfLimpo, id]
+            );
             if (existente) {
                 return res.status(400).json({ error: 'CPF já cadastrado' });
             }
         }
         
-        db.prepare(`
+        const cpfLimpo = cpf ? cpf.replace(/\D/g, '') : null;
+        
+        await db.query(`
             UPDATE motoristas 
-            SET nome = COALESCE(?, nome),
-                cpf = COALESCE(?, cpf),
-                cnh = COALESCE(?, cnh),
-                telefone = COALESCE(?, telefone),
-                transportadora_id = COALESCE(?, transportadora_id),
-                ativo = COALESCE(?, ativo)
-            WHERE id = ?
-        `).run(
-            nome, 
-            cpf ? cpf.replace(/\D/g, '') : null, 
-            cnh, 
-            telefone, 
-            transportadora_id,
-            ativo !== undefined ? (ativo ? 1 : 0) : null, 
-            id
-        );
+            SET nome = COALESCE($1, nome),
+                cpf = COALESCE($2, cpf),
+                cnh = COALESCE($3, cnh),
+                telefone = COALESCE($4, telefone),
+                transportadora_id = COALESCE($5, transportadora_id),
+                ativo = COALESCE($6, ativo)
+            WHERE id = $7
+        `, [nome, cpfLimpo, cnh, telefone, transportadora_id, ativo, id]);
         
         res.json({ message: 'Motorista atualizado com sucesso' });
     } catch (error) {
@@ -172,9 +180,12 @@ router.put('/:id', authMiddleware, perfilMiddleware('admin', 'portaria'), (req, 
     }
 });
 
-router.delete('/:id', authMiddleware, perfilMiddleware('admin'), (req, res) => {
+router.delete('/:id', authMiddleware, perfilMiddleware('admin'), async (req, res) => {
     try {
-        db.prepare('UPDATE motoristas SET ativo = 0 WHERE id = ?').run(req.params.id);
+        await db.query(
+            'UPDATE motoristas SET ativo = false WHERE id = $1',
+            [req.params.id]
+        );
         res.json({ message: 'Motorista desativado com sucesso' });
     } catch (error) {
         console.error('Erro ao desativar motorista:', error);

@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const db = require('../database/connection');
 
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
     const authHeader = req.headers.authorization;
     
     if (!authHeader) {
@@ -23,7 +23,10 @@ function authMiddleware(req, res, next) {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
-        const usuario = db.prepare('SELECT id, nome, email, perfil FROM usuarios WHERE id = ? AND ativo = 1').get(decoded.id);
+        const usuario = await db.getOne(
+            'SELECT id, nome, email, perfil FROM usuarios WHERE id = $1 AND ativo = true',
+            [decoded.id]
+        );
         
         if (!usuario) {
             return res.status(401).json({ error: 'Usuário não encontrado ou inativo' });

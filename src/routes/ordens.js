@@ -4,15 +4,16 @@ const { authMiddleware, perfilMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
-function gerarNumeroOrdem() {
+async function gerarNumeroOrdem() {
     const ano = new Date().getFullYear();
     const mes = String(new Date().getMonth() + 1).padStart(2, '0');
+    const prefixo = `OD${ano}${mes}`;
     
-    const ultimaOrdem = db.prepare(`
+    const ultimaOrdem = await db.getOne(`
         SELECT numero FROM ordens 
-        WHERE numero LIKE ? 
+        WHERE numero LIKE $1 
         ORDER BY id DESC LIMIT 1
-    `).get(`OD${ano}${mes}%`);
+    `, [`${prefixo}%`]);
     
     let sequencial = 1;
     if (ultimaOrdem) {
@@ -20,10 +21,10 @@ function gerarNumeroOrdem() {
         sequencial = numAnterior + 1;
     }
     
-    return `OD${ano}${mes}${String(sequencial).padStart(4, '0')}`;
+    return `${prefixo}${String(sequencial).padStart(4, '0')}`;
 }
 
-router.post('/publica', (req, res) => {
+router.post('/publica', async (req, res) => {
     try {
         const { 
             motorista_id, 
@@ -43,27 +44,28 @@ router.post('/publica', (req, res) => {
             });
         }
         
-        const numero = gerarNumeroOrdem();
+        const numero = await gerarNumeroOrdem();
         
-        const result = db.prepare(`
+        const result = await db.getOne(`
             INSERT INTO ordens (
                 numero, motorista_id, transportadora_id, empresa_destino_id,
                 placa_veiculo, tipo_carga, peso_carga, quantidade_volumes,
                 nota_fiscal, observacoes, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'aguardando')
-        `).run(
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'aguardando')
+            RETURNING id
+        `, [
             numero, motorista_id, transportadora_id || null, empresa_destino_id,
             placa_veiculo.toUpperCase(), tipo_carga, peso_carga || null, 
             quantidade_volumes || null, nota_fiscal || null, observacoes || null
-        );
+        ]);
         
-        db.prepare(`
+        await db.query(`
             INSERT INTO historico_status (ordem_id, status_novo, observacao)
-            VALUES (?, 'aguardando', 'Ordem criada pelo motorista')
-        `).run(result.lastInsertRowid);
+            VALUES ($1, 'aguardando', 'Ordem criada pelo motorista')
+        `, [result.id]);
         
         res.status(201).json({ 
-            id: result.lastInsertRowid,
+            id: result.id,
             numero: numero,
             message: 'Ordem de descarga criada com sucesso'
         });
@@ -73,9 +75,9 @@ router.post('/publica', (req, res) => {
     }
 });
 
-router.get('/consulta/:numero', (req, res) => {
+router.get('/consulta/:numero', async (req, res) => {
     try {
-        const ordem = db.prepare(`
+        const ordem = await db.getOne(`
             SELECT o.*, 
                    m.nome as motorista_nome,
                    t.razao_social as transportadora_nome,
@@ -84,8 +86,8 @@ router.get('/consulta/:numero', (req, res) => {
             LEFT JOIN motoristas m ON o.motorista_id = m.id
             LEFT JOIN transportadoras t ON o.transportadora_id = t.id
             LEFT JOIN empresas_destino e ON o.empresa_destino_id = e.id
-            WHERE o.numero = ?
-        `).get(req.params.numero);
+            WHERE o.numero = $1
+        `, [req.params.numero]);
         
         if (!ordem) {
             return res.status(404).json({ error: 'Ordem não encontrada' });
@@ -98,7 +100,7 @@ router.get('/consulta/:numero', (req, res) => {
     }
 });
 
-router.get('/', authMiddleware, (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
     try {
         const { status, data_inicio, data_fim, empresa_id, motorista, page = 1, limit = 20 } = req.query;
         
@@ -116,40 +118,42 @@ router.get('/', authMiddleware, (req, res) => {
         `;
         
         const params = [];
+        let paramIndex = 1;
         
         if (status) {
-            query += ' AND o.status = ?';
+            query += ` AND o.status = $${paramIndex++}`;
             params.push(status);
         }
         
         if (data_inicio) {
-            query += ' AND DATE(o.data_entrada) >= ?';
+            query += ` AND DATE(o.data_entrada) >= $${paramIndex++}`;
             params.push(data_inicio);
         }
         
         if (data_fim) {
-            query += ' AND DATE(o.data_entrada) <= ?';
+            query += ` AND DATE(o.data_entrada) <= $${paramIndex++}`;
             params.push(data_fim);
         }
         
         if (empresa_id) {
-            query += ' AND o.empresa_destino_id = ?';
+            query += ` AND o.empresa_destino_id = $${paramIndex++}`;
             params.push(empresa_id);
         }
         
         if (motorista) {
-            query += ' AND (m.nome LIKE ? OR m.cpf LIKE ? OR o.numero LIKE ?)';
-            const termo = `%${motorista}%`;
-            params.push(termo, termo, termo);
+            query += ` AND (m.nome ILIKE $${paramIndex} OR m.cpf ILIKE $${paramIndex} OR o.numero ILIKE $${paramIndex})`;
+            params.push(`%${motorista}%`);
+            paramIndex++;
         }
         
         const countQuery = query.replace(/SELECT.*FROM/, 'SELECT COUNT(*) as total FROM');
-        const total = db.prepare(countQuery).get(...params).total;
+        const countResult = await db.getOne(countQuery, params);
+        const total = parseInt(countResult.total);
         
-        query += ' ORDER BY o.data_entrada DESC LIMIT ? OFFSET ?';
+        query += ` ORDER BY o.data_entrada DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
         params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
         
-        const ordens = db.prepare(query).all(...params);
+        const ordens = await db.getAll(query, params);
         
         res.json({
             data: ordens,
@@ -166,78 +170,78 @@ router.get('/', authMiddleware, (req, res) => {
     }
 });
 
-router.get('/dashboard', authMiddleware, (req, res) => {
+router.get('/dashboard', authMiddleware, async (req, res) => {
     try {
         const hoje = new Date().toISOString().split('T')[0];
         const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
         
-        const totaisPorStatus = db.prepare(`
-            SELECT status, COUNT(*) as quantidade, SUM(valor_descarga) as valor_total
+        const totaisPorStatus = await db.getAll(`
+            SELECT status, COUNT(*) as quantidade, COALESCE(SUM(valor_descarga), 0) as valor_total
             FROM ordens
             GROUP BY status
-        `).all();
+        `);
         
-        const ordensHoje = db.prepare(`
+        const ordensHoje = await db.getOne(`
             SELECT COUNT(*) as total FROM ordens
-            WHERE DATE(data_entrada) = ?
-        `).get(hoje).total;
+            WHERE DATE(data_entrada) = $1
+        `, [hoje]);
         
-        const totalFaturado = db.prepare(`
+        const totalFaturado = await db.getOne(`
             SELECT COALESCE(SUM(valor_descarga), 0) as total
             FROM ordens
             WHERE status IN ('faturada', 'paga')
-            AND DATE(data_entrada) >= ?
-        `).get(inicioMes).total;
+            AND DATE(data_entrada) >= $1
+        `, [inicioMes]);
         
-        const totalPendente = db.prepare(`
+        const totalPendente = await db.getOne(`
             SELECT COALESCE(SUM(valor_descarga), 0) as total
             FROM ordens
             WHERE status IN ('finalizada')
-        `).get().total;
+        `);
         
-        const totalPago = db.prepare(`
+        const totalPago = await db.getOne(`
             SELECT COALESCE(SUM(valor_descarga), 0) as total
             FROM ordens
             WHERE status = 'paga'
-            AND DATE(data_entrada) >= ?
-        `).get(inicioMes).total;
+            AND DATE(data_entrada) >= $1
+        `, [inicioMes]);
         
-        const tempoMedio = db.prepare(`
+        const tempoMedio = await db.getOne(`
             SELECT AVG(
-                (julianday(data_fim_descarga) - julianday(data_inicio_descarga)) * 24 * 60
+                EXTRACT(EPOCH FROM (data_fim_descarga - data_inicio_descarga)) / 60
             ) as minutos
             FROM ordens
             WHERE data_inicio_descarga IS NOT NULL 
             AND data_fim_descarga IS NOT NULL
-            AND DATE(data_entrada) >= ?
-        `).get(inicioMes).minutos || 0;
+            AND DATE(data_entrada) >= $1
+        `, [inicioMes]);
         
-        const ordensPorDia = db.prepare(`
+        const ordensPorDia = await db.getAll(`
             SELECT DATE(data_entrada) as data, COUNT(*) as quantidade
             FROM ordens
-            WHERE DATE(data_entrada) >= DATE('now', '-7 days')
+            WHERE DATE(data_entrada) >= CURRENT_DATE - INTERVAL '7 days'
             GROUP BY DATE(data_entrada)
             ORDER BY data
-        `).all();
+        `);
         
-        const aguardando = db.prepare(`
+        const aguardando = await db.getOne(`
             SELECT COUNT(*) as total FROM ordens WHERE status = 'aguardando'
-        `).get().total;
+        `);
         
-        const emDescarga = db.prepare(`
+        const emDescarga = await db.getOne(`
             SELECT COUNT(*) as total FROM ordens WHERE status = 'em_descarga'
-        `).get().total;
+        `);
         
         res.json({
             totaisPorStatus,
-            ordensHoje,
-            totalFaturado,
-            totalPendente,
-            totalPago,
-            tempoMedioMinutos: Math.round(tempoMedio),
+            ordensHoje: parseInt(ordensHoje.total),
+            totalFaturado: parseFloat(totalFaturado.total),
+            totalPendente: parseFloat(totalPendente.total),
+            totalPago: parseFloat(totalPago.total),
+            tempoMedioMinutos: Math.round(parseFloat(tempoMedio.minutos) || 0),
             ordensPorDia,
-            aguardando,
-            emDescarga
+            aguardando: parseInt(aguardando.total),
+            emDescarga: parseInt(emDescarga.total)
         });
     } catch (error) {
         console.error('Erro ao buscar dashboard:', error);
@@ -245,9 +249,9 @@ router.get('/dashboard', authMiddleware, (req, res) => {
     }
 });
 
-router.get('/:id', authMiddleware, (req, res) => {
+router.get('/:id', authMiddleware, async (req, res) => {
     try {
-        const ordem = db.prepare(`
+        const ordem = await db.getOne(`
             SELECT o.*, 
                    m.nome as motorista_nome,
                    m.cpf as motorista_cpf,
@@ -258,20 +262,20 @@ router.get('/:id', authMiddleware, (req, res) => {
             LEFT JOIN motoristas m ON o.motorista_id = m.id
             LEFT JOIN transportadoras t ON o.transportadora_id = t.id
             LEFT JOIN empresas_destino e ON o.empresa_destino_id = e.id
-            WHERE o.id = ?
-        `).get(req.params.id);
+            WHERE o.id = $1
+        `, [req.params.id]);
         
         if (!ordem) {
             return res.status(404).json({ error: 'Ordem não encontrada' });
         }
         
-        const historico = db.prepare(`
+        const historico = await db.getAll(`
             SELECT h.*, u.nome as usuario_nome
             FROM historico_status h
             LEFT JOIN usuarios u ON h.usuario_id = u.id
-            WHERE h.ordem_id = ?
+            WHERE h.ordem_id = $1
             ORDER BY h.criado_em DESC
-        `).all(req.params.id);
+        `, [req.params.id]);
         
         res.json({ ...ordem, historico });
     } catch (error) {
@@ -280,7 +284,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     }
 });
 
-router.put('/:id/status', authMiddleware, (req, res) => {
+router.put('/:id/status', authMiddleware, async (req, res) => {
     try {
         const { status, observacao, valor_descarga } = req.body;
         const { id } = req.params;
@@ -290,7 +294,7 @@ router.put('/:id/status', authMiddleware, (req, res) => {
             return res.status(400).json({ error: 'Status inválido' });
         }
         
-        const ordem = db.prepare('SELECT status FROM ordens WHERE id = ?').get(id);
+        const ordem = await db.getOne('SELECT status FROM ordens WHERE id = $1', [id]);
         if (!ordem) {
             return res.status(404).json({ error: 'Ordem não encontrada' });
         }
@@ -328,32 +332,33 @@ router.put('/:id/status', authMiddleware, (req, res) => {
         
         let updateQuery = `
             UPDATE ordens 
-            SET status = ?, usuario_alteracao_id = ?, atualizado_em = CURRENT_TIMESTAMP
+            SET status = $1, usuario_alteracao_id = $2, atualizado_em = NOW()
         `;
         const params = [status, req.usuario.id];
+        let paramIndex = 3;
         
         if (status === 'em_descarga') {
-            updateQuery += ', data_inicio_descarga = CURRENT_TIMESTAMP';
+            updateQuery += ', data_inicio_descarga = NOW()';
         }
         
         if (status === 'finalizada') {
-            updateQuery += ', data_fim_descarga = CURRENT_TIMESTAMP';
+            updateQuery += ', data_fim_descarga = NOW()';
         }
         
         if (valor_descarga !== undefined) {
-            updateQuery += ', valor_descarga = ?';
+            updateQuery += `, valor_descarga = $${paramIndex++}`;
             params.push(valor_descarga);
         }
         
-        updateQuery += ' WHERE id = ?';
+        updateQuery += ` WHERE id = $${paramIndex}`;
         params.push(id);
         
-        db.prepare(updateQuery).run(...params);
+        await db.query(updateQuery, params);
         
-        db.prepare(`
+        await db.query(`
             INSERT INTO historico_status (ordem_id, status_anterior, status_novo, usuario_id, observacao)
-            VALUES (?, ?, ?, ?, ?)
-        `).run(id, statusAtual, status, req.usuario.id, observacao || null);
+            VALUES ($1, $2, $3, $4, $5)
+        `, [id, statusAtual, status, req.usuario.id, observacao || null]);
         
         res.json({ message: 'Status atualizado com sucesso' });
     } catch (error) {
@@ -362,7 +367,7 @@ router.put('/:id/status', authMiddleware, (req, res) => {
     }
 });
 
-router.put('/:id', authMiddleware, perfilMiddleware('admin', 'portaria', 'operador'), (req, res) => {
+router.put('/:id', authMiddleware, perfilMiddleware('admin', 'portaria', 'operador'), async (req, res) => {
     try {
         const { 
             placa_veiculo, tipo_carga, peso_carga, quantidade_volumes,
@@ -370,27 +375,25 @@ router.put('/:id', authMiddleware, perfilMiddleware('admin', 'portaria', 'operad
         } = req.body;
         const { id } = req.params;
         
-        const ordem = db.prepare('SELECT id FROM ordens WHERE id = ?').get(id);
+        const ordem = await db.getOne('SELECT id FROM ordens WHERE id = $1', [id]);
         if (!ordem) {
             return res.status(404).json({ error: 'Ordem não encontrada' });
         }
         
-        db.prepare(`
+        await db.query(`
             UPDATE ordens 
-            SET placa_veiculo = COALESCE(?, placa_veiculo),
-                tipo_carga = COALESCE(?, tipo_carga),
-                peso_carga = COALESCE(?, peso_carga),
-                quantidade_volumes = COALESCE(?, quantidade_volumes),
-                nota_fiscal = COALESCE(?, nota_fiscal),
-                valor_descarga = COALESCE(?, valor_descarga),
-                observacoes = COALESCE(?, observacoes),
-                usuario_alteracao_id = ?,
-                atualizado_em = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `).run(
-            placa_veiculo, tipo_carga, peso_carga, quantidade_volumes,
-            nota_fiscal, valor_descarga, observacoes, req.usuario.id, id
-        );
+            SET placa_veiculo = COALESCE($1, placa_veiculo),
+                tipo_carga = COALESCE($2, tipo_carga),
+                peso_carga = COALESCE($3, peso_carga),
+                quantidade_volumes = COALESCE($4, quantidade_volumes),
+                nota_fiscal = COALESCE($5, nota_fiscal),
+                valor_descarga = COALESCE($6, valor_descarga),
+                observacoes = COALESCE($7, observacoes),
+                usuario_alteracao_id = $8,
+                atualizado_em = NOW()
+            WHERE id = $9
+        `, [placa_veiculo, tipo_carga, peso_carga, quantidade_volumes,
+            nota_fiscal, valor_descarga, observacoes, req.usuario.id, id]);
         
         res.json({ message: 'Ordem atualizada com sucesso' });
     } catch (error) {

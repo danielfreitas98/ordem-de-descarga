@@ -4,14 +4,14 @@ const { authMiddleware, perfilMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.get('/publico', (req, res) => {
+router.get('/publico', async (req, res) => {
     try {
-        const empresas = db.prepare(`
+        const empresas = await db.getAll(`
             SELECT id, razao_social 
             FROM empresas_destino 
-            WHERE ativo = 1 
+            WHERE ativo = true 
             ORDER BY razao_social
-        `).all();
+        `);
         
         res.json(empresas);
     } catch (error) {
@@ -20,13 +20,13 @@ router.get('/publico', (req, res) => {
     }
 });
 
-router.get('/', authMiddleware, (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
     try {
-        const empresas = db.prepare(`
+        const empresas = await db.getAll(`
             SELECT * FROM empresas_destino 
-            WHERE ativo = 1 
+            WHERE ativo = true 
             ORDER BY razao_social
-        `).all();
+        `);
         
         res.json(empresas);
     } catch (error) {
@@ -35,9 +35,12 @@ router.get('/', authMiddleware, (req, res) => {
     }
 });
 
-router.get('/:id', authMiddleware, (req, res) => {
+router.get('/:id', authMiddleware, async (req, res) => {
     try {
-        const empresa = db.prepare('SELECT * FROM empresas_destino WHERE id = ?').get(req.params.id);
+        const empresa = await db.getOne(
+            'SELECT * FROM empresas_destino WHERE id = $1',
+            [req.params.id]
+        );
         
         if (!empresa) {
             return res.status(404).json({ error: 'Empresa não encontrada' });
@@ -50,7 +53,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     }
 });
 
-router.post('/', authMiddleware, perfilMiddleware('admin', 'portaria'), (req, res) => {
+router.post('/', authMiddleware, perfilMiddleware('admin', 'portaria'), async (req, res) => {
     try {
         const { razao_social, cnpj, endereco } = req.body;
         
@@ -59,19 +62,23 @@ router.post('/', authMiddleware, perfilMiddleware('admin', 'portaria'), (req, re
         }
         
         if (cnpj) {
-            const existente = db.prepare('SELECT id FROM empresas_destino WHERE cnpj = ?').get(cnpj);
+            const existente = await db.getOne(
+                'SELECT id FROM empresas_destino WHERE cnpj = $1',
+                [cnpj]
+            );
             if (existente) {
                 return res.status(400).json({ error: 'CNPJ já cadastrado' });
             }
         }
         
-        const result = db.prepare(`
+        const result = await db.getOne(`
             INSERT INTO empresas_destino (razao_social, cnpj, endereco) 
-            VALUES (?, ?, ?)
-        `).run(razao_social, cnpj || null, endereco || null);
+            VALUES ($1, $2, $3)
+            RETURNING id
+        `, [razao_social, cnpj || null, endereco || null]);
         
         res.status(201).json({ 
-            id: result.lastInsertRowid,
+            id: result.id,
             message: 'Empresa criada com sucesso' 
         });
     } catch (error) {
@@ -80,31 +87,37 @@ router.post('/', authMiddleware, perfilMiddleware('admin', 'portaria'), (req, re
     }
 });
 
-router.put('/:id', authMiddleware, perfilMiddleware('admin', 'portaria'), (req, res) => {
+router.put('/:id', authMiddleware, perfilMiddleware('admin', 'portaria'), async (req, res) => {
     try {
         const { razao_social, cnpj, endereco, ativo } = req.body;
         const { id } = req.params;
         
-        const empresa = db.prepare('SELECT id FROM empresas_destino WHERE id = ?').get(id);
+        const empresa = await db.getOne(
+            'SELECT id FROM empresas_destino WHERE id = $1',
+            [id]
+        );
         if (!empresa) {
             return res.status(404).json({ error: 'Empresa não encontrada' });
         }
         
         if (cnpj) {
-            const existente = db.prepare('SELECT id FROM empresas_destino WHERE cnpj = ? AND id != ?').get(cnpj, id);
+            const existente = await db.getOne(
+                'SELECT id FROM empresas_destino WHERE cnpj = $1 AND id != $2',
+                [cnpj, id]
+            );
             if (existente) {
                 return res.status(400).json({ error: 'CNPJ já cadastrado' });
             }
         }
         
-        db.prepare(`
+        await db.query(`
             UPDATE empresas_destino 
-            SET razao_social = COALESCE(?, razao_social),
-                cnpj = COALESCE(?, cnpj),
-                endereco = COALESCE(?, endereco),
-                ativo = COALESCE(?, ativo)
-            WHERE id = ?
-        `).run(razao_social, cnpj, endereco, ativo !== undefined ? (ativo ? 1 : 0) : null, id);
+            SET razao_social = COALESCE($1, razao_social),
+                cnpj = COALESCE($2, cnpj),
+                endereco = COALESCE($3, endereco),
+                ativo = COALESCE($4, ativo)
+            WHERE id = $5
+        `, [razao_social, cnpj, endereco, ativo, id]);
         
         res.json({ message: 'Empresa atualizada com sucesso' });
     } catch (error) {
@@ -113,9 +126,12 @@ router.put('/:id', authMiddleware, perfilMiddleware('admin', 'portaria'), (req, 
     }
 });
 
-router.delete('/:id', authMiddleware, perfilMiddleware('admin'), (req, res) => {
+router.delete('/:id', authMiddleware, perfilMiddleware('admin'), async (req, res) => {
     try {
-        db.prepare('UPDATE empresas_destino SET ativo = 0 WHERE id = ?').run(req.params.id);
+        await db.query(
+            'UPDATE empresas_destino SET ativo = false WHERE id = $1',
+            [req.params.id]
+        );
         res.json({ message: 'Empresa desativada com sucesso' });
     } catch (error) {
         console.error('Erro ao desativar empresa:', error);

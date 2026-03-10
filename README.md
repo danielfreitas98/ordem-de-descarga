@@ -2,19 +2,22 @@
 
 Sistema web completo para registro e gerenciamento de ordens de descarga, com tela pública para motoristas e painel administrativo.
 
+## Tecnologias
+
+- **Backend**: Node.js + Express
+- **Banco de Dados**: PostgreSQL (Supabase)
+- **Frontend**: HTML, CSS, JavaScript (vanilla)
+- **Autenticação**: JWT
+
 ## Funcionalidades
 
 ### Tela Pública (Motoristas)
 - Abertura de ordem de descarga
 - Cadastro automático de motorista via CPF
 - Consulta de status da ordem pelo número
-- Interface responsiva e intuitiva
 
 ### Painel Administrativo
-- **Dashboard** com indicadores em tempo real:
-  - Ordens aguardando e em descarga
-  - Total faturado no mês
-  - Tempo médio de descarga
+- **Dashboard** com indicadores em tempo real
 - **Gestão de Ordens** com filtros e alteração de status
 - **Cadastros** de transportadoras, empresas destino e motoristas
 - **Controle de Usuários** com perfis de acesso
@@ -27,60 +30,99 @@ Sistema web completo para registro e gerenciamento de ordens de descarga, com te
 | **Operador** | Finalizar descarga |
 | **Financeiro** | Faturar e registrar pagamento |
 
-### Status da Ordem
-1. **Aguardando** - Ordem criada, aguardando início
-2. **Em Descarga** - Descarga em andamento
-3. **Finalizada** - Descarga concluída
-4. **Faturada** - Valor definido, aguardando pagamento
-5. **Paga** - Pagamento confirmado
-6. **Cancelada** - Ordem cancelada
+---
 
-## Tecnologias
+## Configuração do Supabase
 
-- **Backend**: Node.js + Express
-- **Banco de Dados**: SQLite (arquivo local)
-- **Frontend**: HTML, CSS, JavaScript (vanilla)
-- **Autenticação**: JWT
+### 1. Criar projeto no Supabase
 
-## Instalação
+1. Acesse https://supabase.com e faça login
+2. Clique em **New Project**
+3. Escolha um nome e senha para o banco
+4. Aguarde a criação (cerca de 2 minutos)
 
-### Pré-requisitos
-- Node.js 18+ instalado
-- npm ou yarn
+### 2. Obter a Connection String
 
-### Passos
+1. No dashboard do projeto, vá em **Settings** > **Database**
+2. Copie a **Connection string (URI)**
+3. Substitua `[YOUR-PASSWORD]` pela senha do projeto
 
-1. **Instalar dependências**
+Exemplo:
+```
+postgresql://postgres:SuaSenha123@db.abcdefghij.supabase.co:5432/postgres
+```
+
+### 3. Configurar o arquivo .env
+
+Crie ou edite o arquivo `.env` na raiz do projeto:
+
+```env
+PORT=3000
+NODE_ENV=development
+DATABASE_URL=postgresql://postgres:SuaSenha@db.seuproject.supabase.co:5432/postgres
+JWT_SECRET=sua_chave_secreta_forte
+JWT_EXPIRES_IN=24h
+```
+
+---
+
+## Instalação Local
+
+### 1. Instalar dependências
+
 ```bash
 npm install
 ```
 
-2. **Inicializar o banco de dados**
+### 2. Inicializar o banco de dados
+
 ```bash
 npm run init-db
 ```
 
-3. **Iniciar o servidor**
+Isso cria as tabelas e o usuário admin padrão.
+
+### 3. Iniciar o servidor
+
 ```bash
 npm start
 ```
 
-4. **Acessar o sistema**
+### 4. Acessar o sistema
+
 - Tela pública: http://localhost:3000
 - Painel admin: http://localhost:3000/admin/
 
-### Usuário padrão
-- **Email**: admin@sistema.com
-- **Senha**: admin123
+### Credenciais padrão
+- **Email**: `admin@sistema.com`
+- **Senha**: `admin123`
 
-> ⚠️ **Importante**: Altere a senha do admin após o primeiro acesso!
+---
 
-## Desenvolvimento
+## Deploy (Vercel, Railway, Render)
 
-Para rodar com hot-reload:
-```bash
-npm run dev
-```
+### Variáveis de ambiente necessárias
+
+| Variável | Descrição |
+|----------|-----------|
+| `DATABASE_URL` | Connection string do Supabase |
+| `JWT_SECRET` | Chave secreta para tokens JWT |
+| `JWT_EXPIRES_IN` | Tempo de expiração (ex: 24h) |
+| `NODE_ENV` | `production` |
+
+### Deploy no Vercel
+
+1. Conecte seu repositório GitHub ao Vercel
+2. Configure as variáveis de ambiente
+3. Deploy automático!
+
+### Deploy no Railway
+
+1. Conecte seu repositório
+2. Configure as variáveis de ambiente
+3. O Railway detecta automaticamente o Node.js
+
+---
 
 ## Estrutura do Projeto
 
@@ -89,21 +131,15 @@ ordem_de_descarga/
 ├── public/                 # Frontend
 │   ├── index.html         # Tela pública
 │   ├── admin/             # Painel administrativo
-│   │   ├── index.html
-│   │   └── login.html
 │   ├── css/
-│   │   └── style.css
 │   └── js/
-│       ├── utils.js
-│       ├── motorista.js
-│       └── admin.js
 ├── src/                    # Backend
 │   ├── app.js             # Servidor Express
 │   ├── database/
 │   │   ├── init.js        # Inicialização do BD
-│   │   └── connection.js
+│   │   └── connection.js  # Pool de conexões
 │   ├── middleware/
-│   │   └── auth.js        # Autenticação JWT
+│   │   └── auth.js
 │   └── routes/
 │       ├── auth.js
 │       ├── ordens.js
@@ -111,11 +147,13 @@ ordem_de_descarga/
 │       ├── transportadoras.js
 │       ├── empresas.js
 │       └── motoristas.js
-├── database.db            # Banco SQLite (gerado)
+├── supabase_schema.sql    # Schema para executar no Supabase
 ├── package.json
-├── .env                   # Configurações
+├── .env                   # Configurações locais
 └── README.md
 ```
+
+---
 
 ## API Endpoints
 
@@ -133,24 +171,11 @@ ordem_de_descarga/
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
 | POST | `/api/auth/login` | Login |
-| GET | `/api/auth/me` | Dados do usuário logado |
 | GET | `/api/ordens` | Lista ordens (com filtros) |
 | GET | `/api/ordens/dashboard` | Dados do dashboard |
-| GET | `/api/ordens/:id` | Detalhes da ordem |
 | PUT | `/api/ordens/:id/status` | Altera status |
-| GET/POST/PUT | `/api/usuarios` | CRUD de usuários (admin) |
-| GET/POST/PUT | `/api/transportadoras` | CRUD de transportadoras |
-| GET/POST/PUT | `/api/empresas` | CRUD de empresas |
-| GET/POST/PUT | `/api/motoristas` | CRUD de motoristas |
 
-## Configuração
-
-Arquivo `.env`:
-```env
-PORT=3000
-JWT_SECRET=sua_chave_secreta_aqui
-JWT_EXPIRES_IN=24h
-```
+---
 
 ## Licença
 
